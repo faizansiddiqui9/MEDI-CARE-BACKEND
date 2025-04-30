@@ -27,8 +27,6 @@ const reminderSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
-  // Uncomment this if you want to use the days feature
-  // days: Number,
 });
 const Reminder = mongoose.model('Reminder', reminderSchema);
 
@@ -77,28 +75,37 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Scheduler
+// Cron Job to Send Email Every Minute
 cron.schedule('* * * * *', async () => {
   const now = new Date();
-  const currentTime = now.toTimeString().slice(0, 5); // "HH:mm"
+  const currentTime = now.toTimeString().slice(0, 5);
+  const oneMinuteAgo = new Date(now.getTime() - 60000).toTimeString().slice(0, 5);
 
-  const reminders = await Reminder.find({ time: currentTime });
+  console.log('⏰ Cron running at:', currentTime);
 
-  reminders.forEach(async (reminder) => {
-    // Remove these lines if `days` not used
-    // if (reminder.days <= 0) return;
-
-    await transporter.sendMail({
-      from: `"Medicine Reminder" <${process.env.EMAIL_USER}>`,
-      to: reminder.email,
-      subject: `⏰ Time to take your medicine`,
-      text: `It's ${reminder.time}. Please take your medicine: ${reminder.medicine}`,
+  try {
+    const reminders = await Reminder.find({
+      time: { $in: [oneMinuteAgo, currentTime] },
     });
 
-    // Remove this if `days` not used
-    // reminder.days -= 1;
-    // await reminder.save();
-  });
+    console.log(`📬 Found ${reminders.length} reminders for time ${currentTime}`);
+
+    reminders.forEach(async (reminder) => {
+      try {
+        await transporter.sendMail({
+          from: `"Medicine Reminder" <${process.env.EMAIL_USER}>`,
+          to: reminder.email,
+          subject: `⏰ Time to take your medicine`,
+          text: `It's ${reminder.time}. Please take your medicine: ${reminder.medicine}`,
+        });
+        console.log(`📧 Email sent to ${reminder.email} for medicine: ${reminder.medicine}`);
+      } catch (err) {
+        console.error(`❌ Failed to send email to ${reminder.email}:`, err.message);
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error in cron job:', err.message);
+  }
 });
 
 // Start Server

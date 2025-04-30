@@ -13,10 +13,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Connect MongoDB
+// MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log('✅ MongoDB connected'))
-.catch((err) => console.error('❌ MongoDB error:', err));
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch((err) => console.error('❌ MongoDB connection error:', err));
 
 // Reminder Schema & Model
 const reminderSchema = new mongoose.Schema({
@@ -27,61 +27,67 @@ const reminderSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  // Uncomment this if you want to use the days feature
+  // days: Number,
 });
 const Reminder = mongoose.model('Reminder', reminderSchema);
 
-// Routes
-// POST Reminder
-app.post('/api/reminders', async (req, res) => {
-    try {
-      const reminder = new Reminder(req.body);
-      await reminder.save();
-      res.status(201).json({ success: true, reminder });
-    } catch (err) {
-      res.status(500).json({ success: false, message: err.message });
-    }
-  });
-  
-  // GET Reminders
-  app.get('/api/reminders', async (req, res) => {
-    try {
-      const reminders = await Reminder.find();
-      res.json(reminders);
-    } catch (err) {
-      res.status(500).json({ success: false, message: err.message });
-    }
-  });
-  
-  // DELETE Reminder by ID
-  app.delete('/api/reminders/:id', async (req, res) => {
-    try {
-      await Reminder.findByIdAndDelete(req.params.id);
-      res.json({ success: true, message: 'Reminder deleted' });
-    } catch (err) {
-      res.status(500).json({ success: false, message: err.message });
-    }
-  });
+// Root Route
+app.get('/', (req, res) => {
+  res.send('✅ Backend is deployed and running!');
+});
 
-// Nodemailer setup
+// Create Reminder
+app.post('/api/reminders', async (req, res) => {
+  try {
+    const reminder = new Reminder(req.body);
+    await reminder.save();
+    res.status(201).json({ success: true, reminder });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Get All Reminders
+app.get('/api/reminders', async (req, res) => {
+  try {
+    const reminders = await Reminder.find();
+    res.json(reminders);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Delete Reminder
+app.delete('/api/reminders/:id', async (req, res) => {
+  try {
+    await Reminder.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Reminder deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Nodemailer Setup
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER, // Your Gmail
-    pass: process.env.EMAIL_PASS, // App Password
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 });
 
-// Scheduler: check every minute
+// Scheduler
 cron.schedule('* * * * *', async () => {
   const now = new Date();
   const currentTime = now.toTimeString().slice(0, 5); // "HH:mm"
-  
+
   const reminders = await Reminder.find({ time: currentTime });
 
   reminders.forEach(async (reminder) => {
-    if (reminder.days <= 0) return;
+    // Remove these lines if `days` not used
+    // if (reminder.days <= 0) return;
 
-    // Send email
     await transporter.sendMail({
       from: `"Medicine Reminder" <${process.env.EMAIL_USER}>`,
       to: reminder.email,
@@ -89,14 +95,14 @@ cron.schedule('* * * * *', async () => {
       text: `It's ${reminder.time}. Please take your medicine: ${reminder.medicine}`,
     });
 
-    // Decrement day
-    reminder.days -= 1;
-    await reminder.save();
+    // Remove this if `days` not used
+    // reminder.days -= 1;
+    // await reminder.save();
   });
 });
 
-// Start server
+// Start Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
